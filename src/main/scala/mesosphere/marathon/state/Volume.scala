@@ -35,6 +35,12 @@ object Volume {
         external = ExternalVolumeInfo.fromProto(proto.getExternal),
         mode = proto.getMode
       )
+    else if (proto.hasMemory)
+      MemoryVolume(
+        containerPath = proto.getContainerPath,
+        memory = MemoryVolumeInfo.fromProto(proto.getMemory),
+        mode = proto.getMode
+      )
     else
       DockerVolume(
         containerPath = proto.getContainerPath,
@@ -48,6 +54,7 @@ object Volume {
       case pv: PersistentVolume => validate(pv)(PersistentVolume.validPersistentVolume)
       case dv: DockerVolume => validate(dv)(DockerVolume.validDockerVolume)
       case ev: ExternalVolume => validate(ev)(ExternalVolume.validExternalVolume(enabledFeatures))
+      case mv: MemoryVolume => validate(mv)(MemoryVolume.validMemoryVolume)
       case _: SecretVolume => Success // validation is done in raml
     }
   }
@@ -331,4 +338,47 @@ case class SecretVolume(
     containerPath: String,
     secret: String) extends Volume with AppSecretVolumeSpec {
   override val mode: Mesos.Volume.Mode = Mesos.Volume.Mode.RO
+}
+
+case class MemoryVolumeInfo(
+  size: Long
+)
+
+object MemoryVolumeInfo {
+  /*
+  import OptionLabelPatterns._
+
+  implicit val validOptions = validator[Map[String, String]] {
+    option => option.keys.each should matchRegex(OptionKeyRegex)
+  }
+  */
+
+  implicit val validMemoryVolumeInfo = validator[MemoryVolumeInfo] { info =>
+    info.size should be > 0L
+    //info.options is valid(validOptions)
+  }
+
+  def fromProto(mvi: Protos.Volume.MemoryVolumeInfo): MemoryVolumeInfo =
+    MemoryVolumeInfo(
+      mvi.getSize
+    )
+}
+
+case class MemoryVolume(
+  containerPath: String,
+  memory: MemoryVolumeInfo,
+  mode: Mesos.Volume.Mode
+) extends Volume
+
+object MemoryVolume {
+  import PathPatterns._
+  import org.apache.mesos.Protos.Volume.Mode
+
+  implicit val validMemoryVolume = validator[MemoryVolume] { vol =>
+    vol.containerPath is notEmpty
+    vol.containerPath is notOneOf(DotPaths: _*)
+    vol.containerPath should matchRegexWithFailureMessage(NoSlashesPattern, "value must not contain \"/\"")
+    vol.mode is equalTo(Mode.RW)
+    vol.memory is valid
+  }
 }

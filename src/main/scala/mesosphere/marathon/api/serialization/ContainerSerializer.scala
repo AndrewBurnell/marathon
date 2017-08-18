@@ -84,6 +84,7 @@ object ContainerSerializer {
       case _: PersistentVolume => // PersistentVolumes are handled differently
       case ev: ExternalVolume => ExternalVolumes.build(builder, ev) // this also adds the volume
       case dv: DockerVolume => builder.addVolumes(VolumeSerializer.toMesos(dv))
+      case _: MemoryVolume => // MemoryVolumes are handled differently...?
       case _: SecretVolume => // SecretVolumes are handled differently
     }
 
@@ -142,6 +143,13 @@ object VolumeSerializer {
         .setMode(d.mode)
         .build()
 
+    case m: MemoryVolume =>
+      Protos.Volume.newBuilder()
+        .setContainerPath(m.containerPath)
+        .setMemory(MemoryVolumeInfoSerializer.toProto(m.memory))
+        .setMode(m.mode)
+        .build()
+
     case s: SecretVolume =>
       Protos.Volume.newBuilder()
         .setContainerPath(s.containerPath)
@@ -196,6 +204,14 @@ object ExternalVolumeInfoSerializer {
     }.foreach(builder.addOptions)
 
     builder.build
+  }
+}
+
+object MemoryVolumeInfoSerializer {
+  def toProto(info: MemoryVolumeInfo): Protos.Volume.MemoryVolumeInfo = {
+    Protos.Volume.MemoryVolumeInfo.newBuilder()
+      .setSize(info.size)
+      .build()
   }
 }
 

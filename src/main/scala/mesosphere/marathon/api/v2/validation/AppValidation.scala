@@ -240,6 +240,15 @@ trait AppValidation {
         featureEnabled[AppVolume](enabledFeatures, Features.EXTERNAL_VOLUMES)
       )
     }
+    val validMemoryVolume: Validator[AppMemoryVolume] = {
+      val validMemoryInfo = validator[MemoryVolume] { info =>
+        info.size should be > 0L
+      }
+      validator[AppMemoryVolume] { v =>
+        v.mode is equalTo(ReadMode.Rw)
+        v.memory is valid(validMemoryInfo)
+      }
+    }
     val validSecretVolume: Validator[AppSecretVolume] = {
       isTrue("volume.secret must refer to an existing secret")(
         vol => secrets.contains(vol.secret))
@@ -249,6 +258,7 @@ trait AppValidation {
         case v: AppDockerVolume => validate(v)(validHostVolume)
         case v: AppPersistentVolume => validate(v)(validPersistentVolume)
         case v: AppExternalVolume => validate(v)(validExternalVolume)
+        case v: AppMemoryVolume => validate(v)(validMemoryVolume)
         case v: AppSecretVolume => validate(v)(validSecretVolume) // Validate that the secret reference is valid
         case _ => Failure(Set(RuleViolation(v, "Unknown app volume type", None)))
       }

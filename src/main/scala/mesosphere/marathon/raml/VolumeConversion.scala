@@ -2,8 +2,7 @@ package mesosphere.marathon
 package raml
 
 import mesosphere.marathon.core.pod
-
-import mesosphere.marathon.state.{ DiskType, ExternalVolumeInfo, PersistentVolumeInfo, SecretVolume }
+import mesosphere.marathon.state._
 import mesosphere.marathon.stream.Implicits._
 import mesosphere.mesos.protos.Implicits._
 import org.apache.mesos.{ Protos => Mesos }
@@ -48,6 +47,10 @@ trait VolumeConversion extends ConstraintConversion with DefaultConversions {
       PersistentVolume(pvType, pv.size, pv.maxSize, pv.constraints.toRaml[Set[Seq[String]]])
     }
 
+    implicit val memoryVolumeInfoWrites: Writes[state.MemoryVolumeInfo, MemoryVolume] = Writes { mv =>
+      MemoryVolume(size = mv.size)
+    }
+
     volume match {
       case dv: state.DockerVolume => AppDockerVolume(
         volume.containerPath,
@@ -61,6 +64,10 @@ trait VolumeConversion extends ConstraintConversion with DefaultConversions {
         volume.containerPath,
         persistent = pv.persistent.toRaml,
         mode = volume.mode.toRaml)
+      case mv: state.MemoryVolume => AppMemoryVolume(
+        volume.containerPath,
+        memory = mv.memory.toRaml,
+        mode = volume.mode.toRaml)
       case sv: state.SecretVolume => AppSecretVolume(
         volume.containerPath,
         secret = sv.secret
@@ -72,6 +79,7 @@ trait VolumeConversion extends ConstraintConversion with DefaultConversions {
     case v: AppExternalVolume => volumeExternalReads.read(v)
     case v: AppPersistentVolume => volumePersistentReads.read(v)
     case v: AppDockerVolume => volumeDockerReads.read(v)
+    case v: AppMemoryVolume => volumeMemoryReads.read(v)
     case v: AppSecretVolume => volumeSecretReads.read(v)
     case unsupported => throw SerializationFailedException(s"unsupported app volume type $unsupported")
   }
@@ -116,6 +124,13 @@ trait VolumeConversion extends ConstraintConversion with DefaultConversions {
     state.PersistentVolume(containerPath = vol.containerPath, persistent = info, mode = vol.mode.fromRaml)
   }
 
+  implicit val volumeMemoryReads: Reads[AppMemoryVolume, state.Volume] = Reads { vol =>
+    val info = MemoryVolumeInfo(
+      size = vol.memory.size
+    )
+    state.MemoryVolume(containerPath = vol.containerPath, memory = info, mode = vol.mode.fromRaml)
+  }
+
   implicit val volumeDockerReads: Reads[AppDockerVolume, state.Volume] = Reads { vol =>
     state.DockerVolume(containerPath = vol.containerPath, hostPath = vol.hostPath, mode = vol.mode.fromRaml)
   }
@@ -150,6 +165,11 @@ trait VolumeConversion extends ConstraintConversion with DefaultConversions {
       constraints = vol.whenOrElse(_.getConstraintsCount > 0, _.getConstraintsList.map(_.toRaml[Seq[String]])(collection.breakOut), PersistentVolume.DefaultConstraints)
     )
   }
+  implicit val appVolumeMemoryProtoRamlWriter: Writes[Protos.Volume.MemoryVolumeInfo, MemoryVolume] = Writes { vol =>
+    MemoryVolume(
+      size = vol.getSize
+    )
+  }
 
   implicit val appVolumeProtoRamlWriter: Writes[Protos.Volume, AppVolume] = Writes {
     case vol if vol.hasExternal => AppExternalVolume(
@@ -160,6 +180,11 @@ trait VolumeConversion extends ConstraintConversion with DefaultConversions {
     case vol if vol.hasPersistent => AppPersistentVolume(
       containerPath = vol.getContainerPath,
       persistent = vol.getPersistent.toRaml,
+      mode = vol.getMode.toRaml
+    )
+    case vol if vol.hasMemory => AppMemoryVolume(
+      containerPath = vol.getContainerPath,
+      memory = vol.getMemory.toRaml,
       mode = vol.getMode.toRaml
     )
     case vol if vol.hasSecret => AppSecretVolume(

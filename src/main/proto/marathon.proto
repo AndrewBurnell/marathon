@@ -295,6 +295,11 @@ message Volume {
     repeated mesos.Label options = 4;
   }
 
+  // TODO(aburnell) - drive options?
+  message MemoryVolumeInfo {
+    required uint64 size = 1;
+  }
+
   // Defining properties of secret volumes
   message SecretVolumeInfo {
     required string secret = 1;
@@ -327,6 +332,9 @@ message Volume {
 
   // Defines a SecretVolume; implies no hostPath, persistent or external.
   optional SecretVolumeInfo secret = 7;
+
+  // Defines a MemoryVolume; implies no hostPath, persistent, or external.
+  optional MemoryVolumeInfo memory = 8;
 }
 
 message StorageVersion {
