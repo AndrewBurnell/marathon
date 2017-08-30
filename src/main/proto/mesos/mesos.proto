@@ -1017,6 +1017,7 @@ message Resource {
         UNKNOWN = 0;
         PATH = 1;
         MOUNT = 2;
+        MEMORY = 3;
       }
 
       // A folder that can be located on a separate disk device. This
@@ -1034,9 +1035,15 @@ message Resource {
         optional string root = 1;
       }
 
+      message Memory {
+        // Size of memory disk to allocate.
+        optional uint64 size = 1;
+      }
+
       required Type type = 1;
       optional Path path = 2;
       optional Mount mount = 3;
+      optional Memory memory = 4;
     }
 
     optional Source source = 3;
