@@ -19,19 +19,20 @@ trait MesosTest extends UnitTest with BeforeAndAfterAll {
   val PackageFile = "^([^-]+).+?\\.(rpm|deb)$".r
 
   def assertOneOfEachKind(): Unit = {
+    assert(packagePath.toIO.exists, "package path ${packagePath} does not exist! Did you build packages?")
     val counts = ls(packagePath).
       map(_.last).
       collect { case PackageFile(launcher, ext) => (launcher, ext) }.
       groupBy(identity).
       mapValues(_.length)
 
-    assert(counts.size > 1, "No packages exist!")
+    assert(counts.size > 0, "No packages exist!")
     assert(counts.forall { case (k, count) => count == 1 }, "Some packages have multiple versions; " +
       s"please assert that ${packagePath} contains one version of each package only (for each service manager and package format)")
   }
 
   def removeStaleDockerInstances(): Unit = {
-    val images = %%("docker", "ps", "--filter", "label=marathon-package-test", "--format", "{{.ID}}").
+    val images = %%("docker", "ps", "-a", "--filter", "label=marathon-package-test", "--format", "{{.ID}}").
       out.string.split("\n").filter(_ != "")
 
     images.foreach { id =>
@@ -341,6 +342,35 @@ class UbuntuUpstartTest extends MesosTest {
   }
 }
 
+// Test the sbt-native-packager docker produced image
+class DockerImageTest extends MesosTest {
+  val tag = sys.env.getOrElse("DOCKER_TAG", %%("git", "describe", "HEAD", "--tags", "--abbrev=7").out.string.trim)
+  val image = s"mesosphere/marathon:${tag}"
+
+  var mesos: Container = _
+  var dockerMarathon: Container = _
+
+  override def beforeAll(): Unit = {
+    super.beforeAll()
+    mesos = startMesos()
+
+    System.err.println(s"Using docker image ${image}")
+    dockerMarathon = runContainer(
+      "--name", "docker-marathon",
+      "-e", s"MARATHON_MASTER=zk://${mesos.ipAddress}:2181/mesos",
+      "-e", s"MARATHON_ZK=zk://${mesos.ipAddress}:2181/marathon",
+      image)
+  }
+
+  "The installed Marathon registers and connects to the running Mesos master" in {
+    implicit val patienceConfig = veryPatient
+    eventually {
+      execBash(mesos.containerId,
+        s"""curl -s ${mesos.ipAddress}:5050/frameworks | jq '.frameworks[].name' -r""").trim shouldBe ("marathon")
+    }
+  }
+}
+
 def help(testNames: Seq[String]): Unit = {
   println(s"""
 Usage: ./test.sc [tests to run]
@@ -375,7 +405,9 @@ def main(args: String*): Unit = {
     new DebianSystemvTest,
     new CentosSystemdTest,
     new CentosSystemvTest,
-    new UbuntuUpstartTest)
+    new UbuntuUpstartTest,
+    new DockerImageTest
+  )
   val predicate: (String => Boolean) = args match {
     case Seq("all") =>
       { _: String => true }
