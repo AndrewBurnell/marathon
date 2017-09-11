@@ -11,13 +11,14 @@ import scala.concurrent.duration._
 
 @IntegrationTest
 class GracefulTaskKillIntegrationTest extends AkkaIntegrationTest with EmbeddedMarathonTest {
+
   before {
     cleanUp()
   }
 
   // this command simulates a 'long terminating' application
   // note: Integration test does not interpret symbolic names (SIGTERM=15), therefore signal 15 is used.
-  val taskKillGraceDuration = 4
+  val taskKillGraceDuration = 10
   val taskKillGracePeriod = taskKillGraceDuration.seconds
   val appCommand: String = s"""trap \"sleep ${taskKillGraceDuration + 1}\" 15 && sleep 100000"""
 
@@ -25,7 +26,7 @@ class GracefulTaskKillIntegrationTest extends AkkaIntegrationTest with EmbeddedM
     "create a 'long terminating' app with custom taskKillGracePeriod duration" in {
       Given("a new 'long terminating' app with taskKillGracePeriod set to 10 seconds")
       val app = App(
-        (testBasePath / "app").toString,
+        (testBasePath / "app-stopped-with-sigkill").toString,
         cmd = Some(appCommand),
         taskKillGracePeriodSeconds = Some(taskKillGracePeriod.toSeconds.toInt))
 
@@ -57,7 +58,7 @@ class GracefulTaskKillIntegrationTest extends AkkaIntegrationTest with EmbeddedM
     "create a 'short terminating' app with custom taskKillGracePeriod duration" in {
       Given("a new 'short terminating' app with taskKillGracePeriod set to 10 seconds")
       val app = App(
-        (testBasePath / "app").toString,
+        (testBasePath / "app-stopped-with-sigterm").toString,
         cmd = Some("sleep 100000"),
         taskKillGracePeriodSeconds = Some(taskKillGracePeriod.toSeconds.toInt))
 

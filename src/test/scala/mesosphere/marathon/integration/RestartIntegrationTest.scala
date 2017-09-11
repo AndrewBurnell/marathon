@@ -1,8 +1,6 @@
 package mesosphere.marathon
 package integration
 
-import java.util.concurrent.atomic.AtomicInteger
-
 import mesosphere.AkkaIntegrationTest
 import mesosphere.marathon.integration.setup._
 import mesosphere.marathon.state.PathId
@@ -30,7 +28,7 @@ class RestartIntegrationTest extends AkkaIntegrationTest with MesosClusterTest w
       *
       * Adapted from https://github.com/EvanKrall/reproduce_marathon_issue_3783
       */
-    "not kill a running task currently involved in a deployment" in withMarathon("restart-dont-kill") { (server, f) =>
+    "not kill a running task currently involved in a deployment" in withMarathon("RestartIntegrationTest-restart-dont-kill") { (server, f) =>
       Given("a new app with an impossible constraint")
       // Running locally, the constraint of a unique hostname should prevent the second instance from deploying.
       val constraint = raml.Constraints("hostname" -> "UNIQUE")
@@ -49,7 +47,7 @@ class RestartIntegrationTest extends AkkaIntegrationTest with MesosClusterTest w
     }
 
     "readiness" should {
-      "deployment with 1 ready and 1 not ready instance is continued properly after a restart" in withMarathon("readiness") { (server, f) =>
+      "deployment with 1 ready and 1 not ready instance is continued properly after a restart" in withMarathon("RestartIntegrationTest-readiness") { (server, f) =>
         val ramlReadinessCheck = raml.ReadinessCheck(
           name = "ready",
           portName = "http",
@@ -60,7 +58,7 @@ class RestartIntegrationTest extends AkkaIntegrationTest with MesosClusterTest w
         )
 
         Given("a new simple app with 2 instances")
-        val appId = nextAppId(f)
+        val appId = f.testBasePath / "one-ready-one-not-ready-continue"
         val createApp = f.appProxy(appId, versionId = "v1", instances = 2, healthCheck = None)
 
         createApp.instances shouldBe 2 withClue (s"${appId} has ${createApp.instances} instances running but there should be 2.")
@@ -123,7 +121,7 @@ class RestartIntegrationTest extends AkkaIntegrationTest with MesosClusterTest w
       }
     }
     "health checks" should {
-      "deployment with 2 unhealthy instances is continued properly after master abdication" in withMarathon("health-check") { (server, f) =>
+      "deployment with 2 unhealthy instances is continued properly after master abdication" in withMarathon("RestartIntegrationTest-health-check") { (server, f) =>
         val ramlHealthCheck: raml.AppHealthCheck = raml.AppHealthCheck(
           path = Some("/health"),
           portIndex = Some(0),
@@ -132,7 +130,7 @@ class RestartIntegrationTest extends AkkaIntegrationTest with MesosClusterTest w
           protocol = raml.AppHealthCheckProtocol.Http)
 
         Given("a new simple app with 2 instances")
-        val appId = nextAppId(f)
+        val appId = f.testBasePath / "two-unhealthy-continue"
         val createApp = f.appProxy(appId, versionId = "v1", instances = 2, healthCheck = None)
         val created = f.marathon.createAppV2(createApp)
         created should be(Created)
@@ -195,7 +193,4 @@ class RestartIntegrationTest extends AkkaIntegrationTest with MesosClusterTest w
       }
     }
   }
-
-  val appIdCount = new AtomicInteger()
-  def nextAppId(f: MarathonTest): PathId = f.testBasePath / s"app-${appIdCount.getAndIncrement()}"
 }

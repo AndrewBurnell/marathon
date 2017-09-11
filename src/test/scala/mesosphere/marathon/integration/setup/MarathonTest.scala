@@ -99,7 +99,6 @@ case class LocalMarathon(
     "min_revive_offers_interval" -> "100",
     "hostname" -> "localhost",
     "logging_level" -> "debug",
-    "minimum_viable_task_execution_duration" -> "0",
     "offer_matching_timeout" -> 10.seconds.toMillis.toString // see https://github.com/mesosphere/marathon/issues/4920
   ) ++ conf
 
@@ -142,14 +141,14 @@ case class LocalMarathon(
       marathon = Some(create())
     }
     val port = conf.get("http_port").orElse(conf.get("https_port")).map(_.toInt).getOrElse(httpPort)
-    val future = Retry(s"marathon-$port", maxAttempts = Int.MaxValue, minDelay = 1.milli, maxDelay = 5.seconds, maxDuration = 5.minutes) {
+    val future = Retry(s"Waiting for Marathon on $port", maxAttempts = Int.MaxValue, minDelay = 1.milli, maxDelay = 5.seconds, maxDuration = 4.minutes) {
       async {
         val result = await(Http().singleRequest(Get(s"http://localhost:$port/v2/leader")))
         result.discardEntityBytes() // forget about the body
         if (result.status.isSuccess()) { // linter:ignore //async/await
           Done
         } else {
-          throw new Exception("Marathon not ready yet.")
+          throw new Exception(s"Marathon on port=$port hasn't started yet. Giving up waiting..")
         }
       }
     }
@@ -313,8 +312,6 @@ trait MarathonTest extends HealthCheckEndpoint with StrictLogging with ScalaFutu
   val testBasePath: PathId
   def suiteName: String
 
-  val appProxyIds = Lock(mutable.ListBuffer.empty[String])
-
   implicit val system: ActorSystem
   implicit val mat: Materializer
   implicit val ctx: ExecutionContext
@@ -343,16 +340,6 @@ trait MarathonTest extends HealthCheckEndpoint with StrictLogging with ScalaFutu
 
   protected val events = new ConcurrentLinkedQueue[ITSSEEvent]()
 
-  protected[setup] def killAppProxies(): Unit = {
-    val PIDRE = """^\s*(\d+)\s+(.*)$""".r
-    val allJavaIds = Process("jps -lv").!!.split("\n")
-    val pids = allJavaIds.collect {
-      case PIDRE(pid, exec) if appProxyIds(_.exists(exec.contains)) => pid
-    }
-    if (pids.nonEmpty) {
-      Process(s"kill -9 ${pids.mkString(" ")}").run().exitValue()
-    }
-  }
   implicit class PathIdTestHelper(path: String) {
     def toRootTestPath: PathId = testBasePath.append(path).canonicalPath()
     def toTestPath: PathId = testBasePath.append(path)
@@ -472,7 +459,6 @@ trait MarathonTest extends HealthCheckEndpoint with StrictLogging with ScalaFutu
     require(groups.value.isEmpty, s"groups weren't empty: ${groups.entityPrettyJsonString}")
     events.clear()
     healthChecks(_.clear())
-    killAppProxies()
 
     logger.info("... CLEAN UP finished <<<")
   }
@@ -525,19 +511,37 @@ trait MarathonTest extends HealthCheckEndpoint with StrictLogging with ScalaFutu
 
   /**
     * Method waits for events and calls their callbacks independently of the events order. It receives a
-    * mutable map of EventId -> Callback e.g. mutable.Map("deployment_failed" -> _.id == deploymentId),
+    * map of EventId -> Callback e.g.:
+    * Map("deployment_failed" -> _.id == deploymentId, "deployment_successful" -> _.id == rollbackId)),
     * checks every event for it's existence in the map and if found, calls it's callback method. If successful, the entry
     * is removed from the map. Returns if the map is empty.
     */
   def waitForEventsWith(
     description: String,
-    waitingFor: mutable.Map[String, CallbackEvent => Boolean],
+    eventsMap: Map[String, CallbackEvent => Boolean],
     maxWait: FiniteDuration = patienceConfig.timeout.toMillis.millis) = {
+    val waitingFor = mutable.Map(eventsMap.toSeq: _*)
     waitForEventMatching(description, maxWait) { event =>
       if (waitingFor.get(event.eventType).fold(false)(fn => fn(event))) {
         waitingFor -= event.eventType
       }
       waitingFor.isEmpty
+    }
+  }
+
+  /**
+    * Method waits for ANY (and only one) of the given events. It receives a map of EventId -> Callback e.g.:
+    * Map("deployment_failed" -> _.id == deploymentId, "deployment_successful" -> _.id == rollbackId)),
+    * and checks every incoming event for it's existence in the map and if found, calls it's callback method.
+    * Returns if event found and callback returns true.
+    */
+  def waitForAnyEventWith(
+    description: String,
+    eventsMap: Map[String, CallbackEvent => Boolean],
+    maxWait: FiniteDuration = patienceConfig.timeout.toMillis.millis) = {
+    val waitingForAny = mutable.Map(eventsMap.toSeq: _*)
+    waitForEventMatching(description, maxWait) { event =>
+      waitingForAny.get(event.eventType).fold(false)(fn => fn(event))
     }
   }
 
@@ -636,7 +640,6 @@ trait MarathonTest extends HealthCheckEndpoint with StrictLogging with ScalaFutu
       mesos.teardown(frameworkId).futureValue
     }
     Try(healthEndpoint.unbind().futureValue)
-    Try(killAppProxies())
   }
 
   /**
@@ -739,6 +742,7 @@ trait MarathonFixture extends AkkaUnitTestLike with MesosClusterTest with Zookee
       f(marathonServer, marathonTest)
     } finally {
       sseStream.cancel()
+      if (marathonServer.isRunning()) marathonTest.cleanUp()
       marathonTest.teardown()
       marathonServer.stop()
     }

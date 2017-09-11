@@ -97,7 +97,9 @@ object InstanceUpdater extends StrictLogging {
               since = op.timestamp
             ),
             tasksMap = Map(updatedTask.taskId -> updatedTask),
-            runSpecVersion = op.runSpecVersion
+            runSpecVersion = op.runSpecVersion,
+            // The AgentInfo might have changed if the agent re-registered with a new ID after a reboot
+            agentInfo = op.agentInfo
           )
           val events = eventsGenerator.events(updated, task = None, op.timestamp, previousCondition = Some(instance.state.condition))
           InstanceUpdateEffect.Update(updated, oldState = Some(instance), events)
@@ -117,6 +119,9 @@ object InstanceUpdater extends StrictLogging {
         state = instance.state.copy(condition = Condition.Killed)
       )
       val events = eventsGenerator.events(updatedInstance, task = None, now, previousCondition = Some(instance.state.condition))
+
+      logger.debug(s"Expunge reserved ${instance.instanceId}")
+
       InstanceUpdateEffect.Expunge(instance, events)
     } else {
       InstanceUpdateEffect.Failure("ReservationTimeout can only be applied to a reserved instance")
@@ -130,6 +135,9 @@ object InstanceUpdater extends StrictLogging {
     )
     val events = InstanceChangedEventsGenerator.events(
       updatedInstance, task = None, now, previousCondition = Some(instance.state.condition))
+
+    logger.debug(s"Force expunge ${instance.instanceId}")
+
     InstanceUpdateEffect.Expunge(updatedInstance, events)
   }
 

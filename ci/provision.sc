@@ -21,6 +21,11 @@ def installMesos(): Unit = {
     %%('sudo, "apt-get", "install", "-y", "--force-yes", "--no-install-recommends", s"mesos=$version")
   }
 
+  // Stop Mesos service
+  def stop_mesos(): Unit = {
+    %%("sudo", "systemctl", "stop", "mesos-master.service", "mesos-slave.service", "mesos_executor.slice")
+  }
+
   maybeVersion match {
     case Some(version) =>
       try { install_mesos(version) }
@@ -31,6 +36,7 @@ def installMesos(): Unit = {
           install_mesos(version)
       }
       println(s"Successfully installed Mesos $version!")
+      stop_mesos()
     case None => throw new IllegalStateException("Could not determine Mesos version.")
   }
 }
@@ -46,22 +52,22 @@ def killStaleTestProcesses(): Unit = {
   def eligibleProcess(proc: String): Boolean =
     Vector("app_mock", "mesos", "java").exists(proc.contains)
 
-  val stuffToKill = %%('ps, 'aux).out.lines.filter { proc =>
-      eligibleProcess(proc) && !protectedProcess(proc)
+  def processesToKill() = %%('ps, 'aux).out.lines.filter { proc =>
+    eligibleProcess(proc) && !protectedProcess(proc)
   }
 
+  val leaks = processesToKill()
 
-  if (stuffToKill.isEmpty) {
-    println("No junk processes detected")
+  if (leaks.isEmpty) {
+    println("No leaked processes detected")
   } else {
-    println("This requires root permissions. If you run this on a workstation it'll kill more than you expect.")
-    println()
+    println("This requires root permissions. If you run this on a workstation it'll kill more than you expect.\n")
     println(s"Will kill:")
-    stuffToKill.foreach( p => println(s"  $p"))
+    leaks.foreach( p => println(s"  $p"))
 
     val pidPattern = """([^\s]+)\s+([^\s]+)\s+.*""".r
 
-    val pids = stuffToKill.map {
+    val pids = leaks.map {
       case pidPattern(_, pid) => pid
     }
 
@@ -70,5 +76,12 @@ def killStaleTestProcesses(): Unit = {
     // We use %% to avoid exceptions. It is not important if the kill fails.
     try { %%('sudo, 'kill, "-9", pids) }
     catch { case e => println(s"Could not kill stale process.") }
+
+    // Print stale processes if any exist to see what couldn't be killed:
+    val undead = processesToKill()
+    if (undead.nonEmpty) {
+      println("Couldn't kill some leaked processes:")
+      undead.foreach( p => println(s"  $p"))
+    }
   }
 }

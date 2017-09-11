@@ -13,7 +13,6 @@ import mesosphere.marathon.state.PathId._
 import mesosphere.marathon.state.{ PathId, Timestamp }
 import org.slf4j.LoggerFactory
 
-import scala.collection.mutable
 import scala.concurrent.duration._
 
 @IntegrationTest
@@ -620,7 +619,7 @@ class AppDeployIntegrationTest extends AkkaIntegrationTest with EmbeddedMarathon
       def pingTask(taskInfo: CallbackEvent): String = {
         val host: String = taskInfo.info("host").asInstanceOf[String]
         val port: Int = taskInfo.info("ports").asInstanceOf[Seq[Int]].head
-        appMock.ping(host, port).futureValue.asString
+        appMock.ping(host, port).futureValue.entityString
       }
 
       pingTask(taskUpdate1) should be(s"Pong $appIdPath")
@@ -674,7 +673,7 @@ class AppDeployIntegrationTest extends AkkaIntegrationTest with EmbeddedMarathon
 
       Then("old deployment should be canceled and rollback-deployment succeed")
       // Both deployment events may come out of order
-      val waitingFor = mutable.Map[String, CallbackEvent => Boolean](
+      val waitingFor = Map[String, CallbackEvent => Boolean](
         "deployment_failed" -> (_.id == deploymentId),
         "deployment_success" -> (_.id == rollbackId))
       waitForEventsWith(s"waiting for canceled $deploymentId and successful $rollbackId", waitingFor)

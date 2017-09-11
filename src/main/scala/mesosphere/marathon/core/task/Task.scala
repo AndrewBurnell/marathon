@@ -132,8 +132,8 @@ object Task {
     private val LegacyTaskIdRegex = """^(.+)[\._]([^_\.]+)$""".r
 
     // Regular expression for matching resident app taskIds
-    private val ResidentTaskIdRegex = """^(.+)([\._])([^_\.]+)(\.\#)(\d+)$""".r
-    private val ResidentTaskIdAttemptSeparator = ".#"
+    private val ResidentTaskIdRegex = """^(.+)([\._])([^_\.]+)(\.)(\d+)$""".r
+    private val ResidentTaskIdAttemptSeparator = "."
 
     // Regular expression for matching taskIds since instance-era
     private val TaskIdWithInstanceIdRegex = """^(.+)\.(instance-|marathon-)([^_\.]+)[\._]([^_\.]+)$""".r
@@ -188,7 +188,7 @@ object Task {
     def apply(mesosTaskId: MesosProtos.TaskID): Id = new Id(mesosTaskId.getValue)
 
     /**
-      * Create a taskId according to the old schema (no instance designator, not mesos container name).
+      * Create a taskId according to the old schema (no instance designator, no mesos container name).
       * Use this when needing to create an ID for a normal App task or a task for initial reservation handling.
       *
       * Use @forResidentTask when you want to launch a task on an existing reservation.
@@ -211,8 +211,8 @@ object Task {
       * Create a taskId for a resident task launch. This will append or increment a launch attempt count that might
       * contained within the given taskId, and will be part of the resulting taskId.
       *
-      * Example: app.b6ff5fa5-7714-11e7-a55c-5ecf1c4671f6 results in app.b6ff5fa5-7714-11e7-a55c-5ecf1c4671f6.#1
-      * Example: app.b6ff5fa5-7714-11e7-a55c-5ecf1c4671f6.#41 results in app.b6ff5fa5-7714-11e7-a55c-5ecf1c4671f6.#42
+      * Example: app.b6ff5fa5-7714-11e7-a55c-5ecf1c4671f6 results in app.b6ff5fa5-7714-11e7-a55c-5ecf1c4671f6.1
+      * Example: app.b6ff5fa5-7714-11e7-a55c-5ecf1c4671f6.41 results in app.b6ff5fa5-7714-11e7-a55c-5ecf1c4671f6.42
       * @param taskId The ID of the previous task that was used to match offers.
       */
     def forResidentTask(taskId: Task.Id): Task.Id = {

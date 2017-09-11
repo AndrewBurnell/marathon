@@ -18,6 +18,7 @@ import $file.upgrade
 import $file.utils
 
 val PACKAGE_DIR: Path = pwd / 'target / 'universal
+val PACKAGE_DOCS_DIR: Path = pwd / 'target / "universal-docs"
 
 /**
  * Compile Marathon and run unit and integration tests followed by scapegoat.
@@ -61,7 +62,10 @@ def uploadTarballToS3(): Option[awsClient.Artifact] = utils.stage("Upload Packag
  */
 def createAndUploadPackages(): (String, Option[awsClient.Artifact]) = {
   val version = createPackages()
+  val docsPath = PACKAGE_DOCS_DIR / s"marathon-docs-$version.tgz"
   val artifact = uploadTarballToS3()
+  awsClient.upload(docsPath)
+
   createLinuxPackages()
   (version, artifact)
 }
@@ -74,7 +78,7 @@ def createAndUploadPackages(): (String, Option[awsClient.Artifact]) = {
  */
 @main
 def createPackages(): String = utils.stage("Package") {
-  val result = %%('sbt, "universal:packageZipTarball", "version")
+  val result = %%('sbt, "universal:packageZipTarball", "universal-docs:packageZipTarball", "version")
 
   // Regex is for version:
   // starting with random chars, match $number$dot$number$dot$number followed by optional alpha numberic chars plus `-`
@@ -99,7 +103,7 @@ def createPackages(): String = utils.stage("Package") {
  */
 @main
 def createLinuxPackages(): Unit = utils.stage("Package Docker Image, Debian and RedHat Packages") {
-  %('sbt, "docker:publishLocal", "packageDebian", "packageRpm")
+  %('sbt, "docker:publishLocal", "packageAll")
 }
 
 /**
@@ -135,6 +139,7 @@ def phabricator(): Unit = {
 @main
 def updateDcosImage(version: String, artifactUrl: String, sha1: String): Unit = utils.stage("Patch DC/OS Branch") {
   upgrade.updateMarathon(artifactUrl, sha1, s"Update Marathon to $version")
+  upgrade.updateMarathonEE(artifactUrl, sha1, s"Update Marathon to $version")
 }
 
 /**
