@@ -1319,7 +1319,6 @@ message Resource {
         UNKNOWN = 0;
         PATH = 1;
         MOUNT = 2;
-        MEMORY = 3;
       }
 
       // A folder that can be located on a separate disk device. This
@@ -1337,15 +1336,9 @@ message Resource {
         optional string root = 1;
       }
 
-      message Memory {
-        // Size of memory disk to allocate.
-        optional uint64 size = 1;
-      }
-
       required Type type = 1;
       optional Path path = 2;
       optional Mount mount = 3;
-      optional Memory memory = 4;
     }
 
     optional Source source = 3;
@@ -2262,6 +2255,11 @@ message Filters {
   // SchedulerDriver::launchTasks. You MUST pass Filters with this
   // field set to change this behavior (i.e., get another offer which
   // includes unused resources sooner or later than the default).
+  //
+  // If this field is set to a number of seconds greater than 31536000
+  // (365 days), then the resources will be considered refused for 365
+  // days. If it is set to a negative number, then the default value
+  // will be used.
   optional double refuse_seconds = 1 [default = 5.0];
 }
 
@@ -2532,10 +2530,12 @@ message Volume {
       // in a backwards-compatible way. See: MESOS-4997.
       UNKNOWN = 0;
 
-      // TODO(gyliu513): Add HOST_PATH and IMAGE as volume source type.
+      // TODO(gyliu513): Add IMAGE as volume source type.
       DOCKER_VOLUME = 1;
+      HOST_PATH = 4;
       SANDBOX_PATH = 2;
       SECRET = 3;
+      MEMORY_VOLUME = 5;
     }
 
     message DockerVolume {
@@ -2547,6 +2547,11 @@ message Volume {
 
       // Volume driver specific options.
       optional Parameters driver_options = 3;
+    }
+
+    // Absolute path pointing to a directory or file on the host.
+    message HostPath {
+      required string path = 1;
     }
 
     // Describe a path from a container's sandbox. The container can
@@ -2568,6 +2573,10 @@ message Volume {
       required string path = 2;
     }
 
+    message MemoryVolume {
+      required uint64 size = 1;
+    }
+
     // Enum fields should be optional, see: MESOS-4997.
     optional Type type = 1;
 
@@ -2577,11 +2586,14 @@ message Volume {
     // The source of the volume created by docker volume driver.
     optional DockerVolume docker_volume = 2;
 
+    optional HostPath host_path = 5;
     optional SandboxPath sandbox_path = 3;
 
     // The volume/secret isolator uses the secret-fetcher module (third-party or
     // internal) downloads the secret and makes it available at container_path.
     optional Secret secret = 4;
+
+    optional MemoryVolume memory_volume = 6;
   }
 
   optional Source source = 5;

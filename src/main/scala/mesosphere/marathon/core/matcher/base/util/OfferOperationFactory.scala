@@ -106,6 +106,35 @@ class OfferOperationFactory(
           .build()
     }
 
+    /*
+    val memoryVolumeSource = Mesos.Resource.DiskInfo.Source
+
+    val memoryVolumeResources: Seq[Mesos.Resource] = memoryVolumes.map { mv =>
+      val disk = {
+        val volume = Mesos.Volume.newBuilder()
+          .setContainerPath(mv.containerPath)
+          .setMode(mv.mode)
+
+        val source = Mesos.Resource.DiskInfo.Source.newBuilder()
+          .setType(Mesos.Resource.DiskInfo.Source.Type.MEMORY)
+          .setMemory(Mesos.Resource.DiskInfo.Source.Memory.newBuilder()
+            .setSize(mv.memory.size)
+          )
+
+        Mesos.Resource.DiskInfo.newBuilder()
+          .setVolume(volume)
+          .setSource(source)
+      }
+
+      Mesos.Resource.newBuilder()
+        .setName("mem")
+        .setType(Mesos.Value.Type.SCALAR)
+        .setScalar(Mesos.Value.Scalar.newBuilder().setValue(mv.memory.size.toDouble).build())
+        .setDisk(disk)
+        .build()
+    }
+    */
+
     val create = Mesos.Offer.Operation.Create.newBuilder()
       .addAllVolumes(volumes.asJava)
 

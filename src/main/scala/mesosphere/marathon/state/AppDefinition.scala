@@ -545,6 +545,7 @@ object AppDefinition extends GeneralPurposeCombinators {
     }
 
   private def validBasicAppDefinition(enabledFeatures: Set[String]) = validator[AppDefinition] { appDef =>
+    // TODO (aburnell): Validation for memory volumes here
     appDef.upgradeStrategy is valid
     appDef.container.each is valid(Container.validContainer(appDef.networks, enabledFeatures))
     appDef.portDefinitions is PortDefinitions.portDefinitionsValidator

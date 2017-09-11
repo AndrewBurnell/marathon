@@ -55,6 +55,7 @@ object ResourceUtil {
     */
   def consumeScalarResource(resource: MesosProtos.Resource, amount: Double): Option[MesosProtos.Resource] = {
     require(resource.getType == MesosProtos.Value.Type.SCALAR)
+    // TODO (aburnell): - decrement here?
     val isMountDiskResource =
       resource.hasDisk && resource.getDisk.hasSource &&
         (resource.getDisk.getSource.getType == Source.Type.MOUNT)

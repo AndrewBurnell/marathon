@@ -377,7 +377,6 @@ object MemoryVolume {
   implicit val validMemoryVolume = validator[MemoryVolume] { vol =>
     vol.containerPath is notEmpty
     vol.containerPath is notOneOf(DotPaths: _*)
-    vol.containerPath should matchRegexWithFailureMessage(NoSlashesPattern, "value must not contain \"/\"")
     vol.mode is equalTo(Mode.RW)
     vol.memory is valid
   }

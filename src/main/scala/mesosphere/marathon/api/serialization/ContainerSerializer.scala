@@ -81,11 +81,12 @@ object ContainerSerializer {
     }
 
     container.volumes.foreach {
-      case _: PersistentVolume => // PersistentVolumes are handled differently
-      case ev: ExternalVolume => ExternalVolumes.build(builder, ev) // this also adds the volume
-      case dv: DockerVolume => builder.addVolumes(VolumeSerializer.toMesos(dv))
-      case _: MemoryVolume => // MemoryVolumes are handled differently...?
-      case _: SecretVolume => // SecretVolumes are handled differently
+      // Populate all external volumes
+      case ev: ExternalVolume => ExternalVolumes.build(builder, ev)
+
+      // Populate all mesos volumes
+      // TODO - defer sandbox mounts
+      case v => VolumeSerializer.toMesos(v).foreach(builder.addVolumes)
     }
 
     // only UCR containers have NetworkInfo's generated this way
@@ -161,15 +162,34 @@ object VolumeSerializer {
   }
 
   /**
-    * Only DockerVolumes can be serialized into a Mesos Protobuf.
+    * Only DockerVolumes and MemoryVolumes can be serialized into a Mesos Protobuf.
     * see mesosphere.marathon.core.externalvolume.impl.providers.DVDIProvider.
     */
-  def toMesos(volume: DockerVolume): mesos.Protos.Volume =
-    mesos.Protos.Volume.newBuilder
-      .setContainerPath(volume.containerPath)
-      .setHostPath(volume.hostPath)
-      .setMode(volume.mode)
-      .build
+  def toMesos(volume: Volume): Option[mesos.Protos.Volume] = volume match {
+    case dv: DockerVolume =>
+      Some(mesos.Protos.Volume.newBuilder
+        .setContainerPath(dv.containerPath)
+        .setHostPath(dv.hostPath)
+        .setMode(dv.mode)
+        .build)
+
+    case mv: MemoryVolume =>
+      val source = mesos.Protos.Volume.Source.newBuilder
+        .setType(mesos.Protos.Volume.Source.Type.MEMORY_VOLUME)
+        .setMemoryVolume(mesos.Protos.Volume.Source.MemoryVolume.newBuilder
+          .setSize(mv.memory.size)
+          .build()
+        )
+        .build()
+
+      Some(mesos.Protos.Volume.newBuilder
+        .setContainerPath(mv.containerPath)
+        .setMode(mv.mode)
+        .setSource(source)
+        .build)
+    // External/Persistent/Secret volumes are handled separately
+    case _ => None
+  }
 }
 
 object PersistentVolumeInfoSerializer {
